@@ -81,15 +81,26 @@ def extract_email_body(msg):
 
 def extract_verification_code(content):
     """
-    Extrae un código de verificación de 6 dígitos.
+    Extrae un código de verificación de 6 dígitos con precisión.
     """
     if not content:
         return None
 
-    match = re.search(r"\b\d{6}\b", content)
+    # 1. Limpiar todas las etiquetas HTML para evitar que atrape colores hex como #202123
+    clean_text = re.sub(r'<[^>]+>', ' ', content)
+    
+    # 2. Buscar por contexto explícito de OpenAI (la forma más segura)
+    context_match = re.search(r"continue:\s*(\d{6})", clean_text, re.IGNORECASE | re.DOTALL)
+    if context_match:
+        return context_match.group(1)
 
-    if match:
-        return match.group(0)
+    # 3. Respaldo: Buscar cualquier número de 6 dígitos aislado en el texto limpio
+    # Evita atrapar parte de números telefónicos o IDs más largos
+    matches = re.findall(r"(?<!\d)(\d{6})(?!\d)", clean_text)
+    
+    if matches:
+        # En caso de haber varios, el código real suele ser el primero visible en el texto principal
+        return matches[0]
 
     return None
 
