@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MtsWanted | Acceso Seguro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #050505;
+            --surface: rgba(255, 255, 255, 0.03);
+            --surface-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.45);
+            --accent-green: #10a37f;
+            --accent-purple: #6b21a8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Luces de Fondo (Gradientes Ambientales) */
+        .ambient-glow {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .ambient-glow::before,
+        .ambient-glow::after {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(90px);
+            opacity: 0.15;
+        }
+
+        .ambient-glow::before {
+            top: -10%;
+            left: -20%;
+            width: 70vw;
+            height: 70vw;
+            background: var(--accent-purple);
+        }
+
+        .ambient-glow::after {
+            bottom: -10%;
+            right: -20%;
+            width: 60vw;
+            height: 60vw;
+            background: var(--accent-green);
+        }
+
+        .app-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 16px 0 40px;
+        }
+
+        .brand {
+            font-size: 1.1rem;
+            font-weight: 800;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: #ffffff;
+        }
+
+        main {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+            flex: 1;
+        }
+
+        .hero-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            width: 100%;
+            max-width: 500px;
+            z-index: 2;
+        }
+
+        h1 {
+            font-size: clamp(2.4rem, 8vw, 3.5rem);
+            font-weight: 800;
+            line-height: 1.05;
+            letter-spacing: -1px;
+            margin-bottom: 16px;
+        }
+
+        p.subtitle {
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+            font-weight: 400;
+            max-width: 90%;
+        }
+
+        /* Tarjeta Glassmorphism */
+        .search-card {
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: 24px;
+            padding: 24px;
+            width: 100%;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .input-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--surface-border);
+            border-radius: 16px;
+            padding: 18px 20px;
+            color: white;
+            font-size: 1.05rem;
+            outline: none;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.25);
+        }
+
+        input:focus {
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
+        }
+
+        button {
+            width: 100%;
+            background: #ffffff;
+            color: #000000;
+            border: none;
+            padding: 18px;
+            border-radius: 16px;
+            font-size: 1.05rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(255, 255, 255, 0.1);
+        }
+
+        button:active:not(:disabled) {
+            transform: scale(0.97);
+        }
+
+        button:disabled {
+            background: #333;
+            color: #888;
+            cursor: not-allowed;
+        }
+
+        #responseMessage {
+            font-size: 0.9rem;
+            text-align: center;
+            min-height: 22px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* Recuadro de Código Premium */
+        #emailContainer {
+            display: none;
+            background: #ffffff;
+            border-radius: 20px;
+            overflow: hidden;
+            width: 100%;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+            animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            margin-top: 8px;
+        }
+
+        .email-header {
+            background: #f8f8fa;
+            padding: 14px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+        }
+
+        .email-header span {
+            color: #888;
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        .close-btn {
+            background: transparent;
+            color: #888;
+            border: none;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 6px 12px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .close-btn:hover {
+            background: rgba(0, 0, 0, 0.05);
+            color: #333;
+        }
+
+        #codeBox {
+            padding: 32px 20px;
+            color: #050505;
+            text-align: center;
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: 8px;
+            user-select: all;
+        }
+
+        .code-help {
+            padding: 0 20px 24px;
+            color: #777;
+            text-align: center;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        /* Iconos - Fila Ordenada en Mobile */
+        .graphics-section {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            width: 100%;
+            padding: 20px 0 40px;
+        }
+
+        .floating-icon {
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            width: 70px;
+            height: 70px;
+            padding: 16px;
+            transition: transform 0.3s;
+        }
+
+        .floating-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .icon-main {
+            width: 85px;
+            height: 85px;
+            border-radius: 24px;
+            box-shadow: 0 0 20px rgba(16, 163, 127, 0.15);
+            border-color: rgba(16, 163, 127, 0.3);
+            animation: pulse-glow 3s infinite alternate;
+        }
+
+        @keyframes pulse-glow {
+            from {
+                box-shadow: 0 0 10px rgba(16, 163, 127, 0.1);
+            }
+
+            to {
+                box-shadow: 0 0 25px rgba(16, 163, 127, 0.3);
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.98);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-15px);
+            }
+        }
+
+        /* ADAPTACIÓN A DESKTOP */
+        @media (min-width: 900px) {
+            header {
+                justify-content: flex-start;
+                padding-bottom: 20px;
+            }
+
+            main {
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+                gap: 80px;
+            }
+
+            .hero-section {
+                align-items: flex-start;
+                text-align: left;
+                flex: 1;
+            }
+
+            input {
+                text-align: left;
+            }
+
+            .search-card {
+                padding: 32px;
+            }
+
+            .form-row {
+                display: flex;
+                gap: 12px;
+                width: 100%;
+            }
+
+            button {
+                width: auto;
+                padding: 0 32px;
+            }
+
+            /* Iconos flotantes decorativos en Desktop */
+            .graphics-section {
+                flex: 1;
+                position: relative;
+                height: 500px;
+                display: block;
+                /* Desactiva flex para usar absolutos */
+            }
+
+            .floating-icon {
+                position: absolute;
+                animation: float 6s infinite ease-in-out;
+            }
+
+            .icon-main {
+                width: 150px;
+                height: 150px;
+                top: 25%;
+                right: 40%;
+                padding: 30px;
+                border-radius: 40px;
+            }
+
+            .icon-sec-1 {
+                width: 100px;
+                height: 100px;
+                top: 15%;
+                right: 10%;
+                animation-delay: -2s;
+            }
+
+            .icon-sec-2 {
+                width: 110px;
+                height: 110px;
+                bottom: 25%;
+                right: 25%;
+                animation-delay: -4s;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="ambient-glow"></div>
+
+    <div class="app-container">
+        <header>
+            <div class="brand">MtsWanted</div>
+        </header>
+
+        <main>
+            <div class="hero-section">
+                <h1>Obtén tu código de acceso</h1>
+
+                <div class="search-card">
+                    <form id="searchForm">
+                        <div class="form-row">
+                            <div class="input-wrapper">
+                                <input type="text" id="email" placeholder="Ingresa aqui tu correo" required
+                                    autocomplete="off" autocorrect="off" spellcheck="false">
+                            </div>
+                            <button type="submit" id="btnSubmit">Buscar</button>
+                        </div>
+                    </form>
+
+                    <p id="responseMessage"></p>
+
+                    <div id="emailContainer">
+                        <div class="email-header">
+                            <span>Código de Verificación</span>
+                            <button type="button" class="close-btn"
+                                onclick="document.getElementById('emailContainer').style.display='none'">CERRAR</button>
+                        </div>
+                        <div id="codeBox"></div>
+                        <div class="code-help">Copia este código e ingrésalo en la plataforma.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="graphics-section">
+                <div class="floating-icon icon-sec-1">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/8/8a/Google_Gemini_logo.svg" alt="Gemini">
+                </div>
+                <div class="floating-icon icon-main">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg" alt="ChatGPT">
+                </div>
+                <div class="floating-icon icon-sec-2">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/8/8a/Google_Gemini_logo.svg" alt="Gemini">
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const searchForm = document.getElementById('searchForm');
+        const emailContainer = document.getElementById('emailContainer');
+        const responseMsg = document.getElementById('responseMessage');
+        const codeBox = document.getElementById('codeBox');
+        const btnSubmit = document.getElementById('btnSubmit');
+
+        searchForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value.trim();
+
+            responseMsg.textContent = 'Buscando código seguro...';
+            responseMsg.style.color = 'var(--text-secondary)';
+            emailContainer.style.display = 'none';
+            codeBox.textContent = '';
+
+            btnSubmit.disabled = true;
+            btnSubmit.textContent = 'Buscando...';
+
+            try {
+                const formData = new FormData();
+                formData.append('email', email);
+
+                const response = await fetch('/buscar', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    responseMsg.textContent = '';
+                    codeBox.textContent = result.code;
+                    emailContainer.style.display = 'block';
+                } else {
+                    responseMsg.textContent = result.message || 'No se encontró el código.';
+                    responseMsg.style.color = '#ff5252';
+                }
+
+            } catch (error) {
+                responseMsg.textContent = 'Error de conexión. Intenta nuevamente.';
+                responseMsg.style.color = '#ff5252';
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.textContent = 'Buscar';
+            }
+        });
+    </script>
+</body>
+
+</html>
