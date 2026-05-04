@@ -79,33 +79,53 @@ def extract_email_body(msg):
     return body
 
 
-def extract_verification_code(content):
+def extract_verification_code(content, subject=""):
     """
-    Extrae un código de verificación de 6 dígitos con precisión.
+    Extrae un código de verificación de 6 dígitos.
+    Soporta correos de OpenAI en inglés y español.
     """
+    # 1. Intentar extraer del asunto primero (los correos en español lo incluyen)
+    #    Ejemplo: "Tu código de ChatGPT es 315073"
+    if subject:
+        subject_match = re.search(r"(?<!\d)(\d{6})(?!\d)", subject)
+        if subject_match:
+            return subject_match.group(1)
+
     if not content:
         return None
 
-    # 1. Limpiar todas las etiquetas HTML para evitar que atrape colores hex como #202123
+    # 2. Limpiar todas las etiquetas HTML para evitar que atrape colores hex como #202123
     clean_text = re.sub(r'<[^>]+>', ' ', content)
-    
-    # 2. Buscar por contexto explícito de OpenAI (la forma más segura)
-    context_match = re.search(r"continue:\s*(\d{6})", clean_text, re.IGNORECASE | re.DOTALL)
-    if context_match:
-        return context_match.group(1)
 
-    # 3. Respaldo: Buscar cualquier número de 6 dígitos aislado en el texto limpio
+    # 3. Buscar por contexto explícito de OpenAI en inglés o español
+    #    Inglés: "...to continue: 315073"
+    #    Español: "...para continuar: 315073" o "...temporal para continuar: 315073"
+    context_patterns = [
+        r"continue:\s*(\d{6})",
+        r"continuar:\s*(\d{6})",
+        r"c[oó]digo[^\d]{0,40}(\d{6})",
+    ]
+    for pattern in context_patterns:
+        match = re.search(pattern, clean_text, re.IGNORECASE | re.DOTALL)
+        if match:
+            return match.group(1)
+
+    # 4. Respaldo: Buscar cualquier número de 6 dígitos aislado en el texto limpio
     # Evita atrapar parte de números telefónicos o IDs más largos
     matches = re.findall(r"(?<!\d)(\d{6})(?!\d)", clean_text)
-    
+
     if matches:
-        # En caso de haber varios, el código real suele ser el primero visible en el texto principal
         return matches[0]
 
     return None
 
 
 def get_latest_email(target_email):
+    """
+    Busca el correo más reciente de OpenAI enviado al alias dado.
+    Busca por remitente (FROM) + destinatario (TO) para soportar
+    correos en cualquier idioma (inglés, español, etc.).
+    """
     mail = None
 
     try:
@@ -113,70 +133,43 @@ def get_latest_email(target_email):
         mail.login(GMAIL_USER, GMAIL_PASS)
         mail.select("inbox")
 
-        expected_subject = "Your temporary ChatGPT verification code"
-
-        # Buscar específicamente correos enviados a ese alias
-        # usando sintaxis IMAP estándar que es menos propensa a errores de parseo
-        search_query = f'(TO "{target_email}" SUBJECT "{expected_subject}")'
+        # Buscar por remitente de OpenAI + destinatario del alias
+        # Esto funciona sin importar el idioma del asunto
+        openai_sender = "noreply@tm.openai.com"
+        search_query = f'(FROM "{openai_sender}" TO "{target_email}")'
         status, data = mail.search(None, search_query)
 
-        if status != "OK":
-            return None, "No se pudo hacer la búsqueda en Gmail."
+        if status != "OK" or not data[0].strip():
+            return None, None, "No se encontró ningún correo de OpenAI para este alias."
 
         mail_ids = data[0].split()
 
         if not mail_ids:
-            return None, "No se encontró ningún correo de verificación de ChatGPT para este alias."
+            return None, None, "No se encontró ningún correo de OpenAI para este alias."
 
-        # Gmail normalmente devuelve del más viejo al más nuevo.
-        # Lo invertimos para revisar primero el más reciente.
-        mail_ids.reverse()
+        # Ordenar numéricamente: ID más alto = correo más reciente en Gmail
+        mail_ids_sorted = sorted(mail_ids, key=lambda x: int(x))
+        latest_id = mail_ids_sorted[-1]
 
-        target_id = None
-
-        # Validación estricta del asunto real del correo
-        for email_id in mail_ids:
-            status, msg_data = mail.fetch(
-                email_id,
-                "(BODY.PEEK[HEADER.FIELDS (SUBJECT)])"
-            )
-
-            if status != "OK":
-                continue
-
-            for response_part in msg_data:
-                if isinstance(response_part, tuple):
-                    header_msg = email.message_from_bytes(response_part[1])
-                    subject = decode_email_subject(header_msg.get("Subject", ""))
-
-                    if subject.strip().lower() == expected_subject.strip().lower():
-                        target_id = email_id
-                        break
-
-            if target_id:
-                break
-
-        if not target_id:
-            return None, "Se encontraron correos parecidos, pero ninguno con el asunto exacto de ChatGPT."
-
-        # Obtener el correo completo que pasó el filtro
-        status, data = mail.fetch(target_id, "(RFC822)")
+        # Obtener el correo más reciente directamente
+        status, data = mail.fetch(latest_id, "(RFC822)")
 
         if status != "OK" or not data or not isinstance(data[0], tuple):
-            return None, "No se pudo leer el correo encontrado."
+            return None, None, "No se pudo leer el correo encontrado."
 
         raw_email = data[0][1]
         msg = email.message_from_bytes(raw_email)
 
+        subject = decode_email_subject(msg.get("Subject", ""))
         body = extract_email_body(msg)
 
-        if not body:
-            return None, "El correo fue encontrado, pero no se pudo extraer el contenido."
+        if not body and not subject:
+            return None, None, "El correo fue encontrado, pero no se pudo extraer el contenido."
 
-        return body, None
+        return body, subject, None
 
     except Exception as e:
-        return None, f"Error de conexión: {str(e)}"
+        return None, None, f"Error de conexión: {str(e)}"
 
     finally:
         if mail:
@@ -207,7 +200,7 @@ def buscar():
     if "@" not in email_input:
         email_input = f"{email_input}@mtswanted.com"
 
-    html_content, error = get_latest_email(email_input)
+    html_content, subject, error = get_latest_email(email_input)
 
     if error:
         return jsonify({
@@ -215,7 +208,7 @@ def buscar():
             "message": error
         })
 
-    code = extract_verification_code(html_content)
+    code = extract_verification_code(html_content, subject)
 
     if not code:
         return jsonify({
